@@ -1,0 +1,10 @@
+{
+  "name": "Figma Data Populator",
+  "id": "figma-data-populator-local",
+  "api": "1.0.0",
+  "main": "main.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "documentAccess": "dynamic-page",
+  "networkAccess": { "allowedDomains": ["https://gravatar.com", "https://www.gravatar.com", "https://s3-alpha.figma.com"], "reasoning": "Fetch user-provided image URLs for card/table fills" }
+}

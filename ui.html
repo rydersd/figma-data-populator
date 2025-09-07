@@ -1,0 +1,1529 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Data Populator</title>
+    <style>
+      body { font: 12px/1.4 -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Inter, sans-serif; color: #111; margin: 0; }
+      .wrap { padding: 12px; display: grid; gap: 12px; }
+      textarea { width: 100%; min-height: 160px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 8px; box-sizing: border-box; }
+      .row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      label { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+      label.inline { flex-direction: row; align-items: center; gap: 6px; }
+      select, input[type="number"], input[type="text"] { width: 100%; padding: 6px; box-sizing: border-box; }
+      button { padding: 8px 10px; border: 1px solid #ddd; background: #f8f8f8; cursor: pointer; }
+      button.primary { background: #64748b; color: white; border-color: #64748b; }
+      .muted { color: #666; }
+      .small { font-size: 11px; }
+      .stack { display: grid; gap: 6px; }
+      .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+      .resize-handle { position: fixed; right: 6px; bottom: 6px; width: 12px; height: 12px; cursor: nwse-resize; opacity: 0.5; }
+      .resize-handle::after { content: ''; position: absolute; right: 2px; bottom: 2px; width: 8px; height: 8px; border-right: 2px solid #999; border-bottom: 2px solid #999; }
+      .mono { font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; }
+      /* Sticky footer + fob */
+      .footer { position: sticky; bottom: 0; background: #fff; border-top: 1px solid #eee; padding: 8px 12px; text-align:center; }
+      #scrollFob { position: fixed; right: 8px; bottom: 56px; width: 22px; height: 22px; border-radius: 11px; border: 1px solid #ddd; background: rgba(100,116,139,0.10); color:#64748b; cursor: pointer; display:none; align-items:center; justify-content:center; font-size: 12px; }
+      #scrollFob:hover { background: rgba(100,116,139,0.18); }
+      /* Inputs */
+      input[type="color"].chip { width: 26px; height: 20px; padding: 0; border: 1px solid #ddd; border-radius: 4px; }
+      .grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="row" style="align-items:center">
+        <div style="display:flex; align-items:center; gap:8px">
+          <div class="btn-group btn-lg" id="modeGroup" role="radiogroup" aria-label="Mode">
+            <button type="button" data-val="table" class="active" title="Table" aria-label="Table" role="radio" aria-checked="true" tabindex="0">Table</button>
+            <button type="button" data-val="cards" title="Cards" aria-label="Cards" role="radio" aria-checked="false" tabindex="-1">Cards</button>
+          </div>
+          <input type="hidden" id="modeVal" value="table" />
+        </div>
+        <div style="text-align:right; display:flex; gap:8px; justify-content:flex-end; align-items:center">
+          <button id="captureBtn" title="Capture Selection" aria-label="Capture Selection" style="display:inline-flex; align-items:center; gap:6px; padding:6px 8px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+              <path d="M8 7l2-2h4l2 2h3a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2V9a2 2 0 012-2h3z" stroke="#64748b" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="12" cy="13" r="3.5" stroke="#64748b" stroke-width="1.5"/>
+            </svg>
+          </button>
+          <button id="configBtn">Configure Columns</button>
+        </div>
+      </div>
+
+      
+
+      <div class="stack">
+        <label class="small muted">Paste CSV or TSV</label>
+        <textarea id="input" placeholder="title,subtitle,description
+Hello,World,This is a row
+Another,Card,More text"></textarea>
+        <div class="row" id="hasHeaderRow">
+          <label class="inline"><span>First row is header</span><input type="checkbox" id="hasHeader" checked /></label>
+          <div></div>
+        </div>
+        <div class="row">
+          <button id="importBtn" aria-label="Import CSV or TSV">Import CSV/TSV</button>
+          <div></div>
+        </div>
+      </div>
+
+      <div class="row" id="tableOptions">
+        <label class="inline"><span>Include table header</span><input type="checkbox" id="headerRow" checked /></label>
+        <label class="inline"><span>Zebra striping</span><input type="checkbox" id="zebra" checked /></label>
+      </div>
+      <div class="row" id="tableScrollOpts" style="display:none">
+        <label class="inline"><span>Scrollable body (fixed header)</span><input type="checkbox" id="bodyScrollable" /></label>
+        <label>Body height (px) <input id="bodyHeight" type="number" value="400" min="100" max="5000" /></label>
+      </div>
+      
+
+      <div class="row" id="cardOptions" style="display:none">
+        <div class="small muted">Cards mode applies text to the selected card(s). No grid is generated.</div>
+        <div></div>
+      </div>
+      <div class="row" id="cardTypeOptions" style="display:none">
+        <label>Card Type
+          <select id="cardType">
+            <option value="custom">Custom (selection/default)</option>
+            <option value="metric">Metric (layers: Metric, Label)</option>
+            <option value="activeWork">Active Work (layers: Name, Description)</option>
+          </select>
+        </label>
+        <div></div>
+      </div>
+      <div class="row" id="cardSymbolOptions" style="display:none">
+        <label>Symbol prop <input id="cardSymbolProp" type="text" value="State" /></label>
+        <label class="inline"><span>Hide when blank</span><input type="checkbox" id="cardSymbolHideBlank" /></label>
+      </div>
+      <div class="row" id="cardSymbolMapRow" style="display:none">
+        <label>Symbol mappings (csv=mapped) <input id="cardSymbolMap" type="text" placeholder="success=Success;warning=Warning;error=Error" /></label>
+        <button id="cardSymbolErrorPreset">Error-only preset</button>
+      </div>
+  <div class="row" id="cardImageOptions" style="display:none">
+    <label>Image URL field <input id="imageField" type="text" placeholder="e.g. avatarUrl" /></label>
+    <label>Image layer name <input id="imageLayer" type="text" value="image" /></label>
+  </div>
+
+      <div class="stack">
+        <label class="inline"><span>Use color variables (optional)</span><input type="checkbox" id="useVars" /></label>
+        <div id="colorPickersSection" class="grid-3">
+          <label id="colorHeaderBgRow">Header BG Color <input id="colHeaderBg" type="color" class="chip" value="#F2F5FA" /></label>
+          <label id="colorHeaderTextRow">Header Text Color <input id="colHeaderText" type="color" class="chip" value="#1F1F2E" /></label>
+          <label id="colorBodyTextRow">Body Text Color <input id="colBodyText" type="color" class="chip" value="#1F1F24" /></label>
+        </div>
+        <div id="zebraColorRow" class="grid-3">
+          <label>Zebra BG Color <input id="colZebraBg" type="color" class="chip" value="#FAFAFA" /></label>
+          <div></div>
+          <div></div>
+        </div>
+        <div id="colorVarsSection" class="grid-3" style="display:none">
+          <label id="varHeaderBgRow">Header BG Var <input id="varHeaderBg" type="text" placeholder="e.g. Color/Header/BG" list="colorVarList" /></label>
+          <label id="varHeaderTextRow">Header Text Var <input id="varHeaderText" type="text" placeholder="e.g. Color/Header/Text" list="colorVarList" /></label>
+          <label id="varBodyTextRow">Body Text Var <input id="varBodyText" type="text" placeholder="e.g. Color/Body/Text" list="colorVarList" /></label>
+          <datalist id="colorVarList"></datalist>
+        </div>
+      </div>
+
+      <div class="row" id="mainCtas" style="grid-template-columns: 1fr;">
+        <button class="primary fullw" id="generateBtn">Generate</button>
+      </div>
+      <div class="footer small" style="display:flex; align-items:center; justify-content:space-between; gap:8px">
+        <div>Love this plugin? <a href="https://buymeacoffee.com/ryderg" target="_blank" rel="noopener noreferrer">Buy me a coffee</a> ☕</div>
+        <label class="inline small" style="margin-left:auto"><span>Debug</span><input type="checkbox" id="dbgToggleTop" /></label>
+      </div>
+      <button id="scrollFob" title="Scroll to bottom" aria-label="Scroll to bottom">▾</button>
+      <div id="schemaWrap" class="stack" style="display:none">
+        <label class="small muted">Schema CSV (copy/download)</label>
+        <textarea id="schemaOut" class="mono" style="min-height:96px"></textarea>
+        <div class="row">
+          <button id="copySchemaBtn">Copy</button>
+          <button id="downloadSchemaBtn">Download</button>
+        </div>
+        
+      </div>
+      <div class="stack" id="updateCta">
+        <button id="updateBtn" class="fullw">Update In Place (Selection)</button>
+        <span class="small muted">Select a previously generated frame</span>
+      </div>
+
+      <div id="hint" class="small muted" role="status" aria-live="polite"></div>
+      <div id="captureInfo" class="stack" style="display:none">
+        <div id="tableSizeInfo" class="small muted" style="display:none"></div>
+        <div id="cardSizesWrap" class="stack" style="display:none">
+          <div class="small">Selected cards</div>
+          <div id="cardSizesList" class="small muted"></div>
+        </div>
+        <div id="layerSizesWrap" class="stack" style="display:none">
+          <div class="small">Layer widths</div>
+          <div id="layerSizesList" class="small muted"></div>
+        </div>
+      </div>
+    </div>
+    <div class="resize-handle" id="resizeHandle" title="Drag to resize"></div>
+    <style>
+      .view { transition: opacity 160ms ease, transform 200ms ease; }
+      .view.hidden { opacity: 0; pointer-events: none; position: absolute; left: 0; right: 0; }
+      #mainView.view.hidden { transform: translateX(-12px); }
+      #configView.view.hidden { transform: translateX(12px); }
+      .cs-width { width: 56px; }
+      .cs-align, .cs-type, .cs-mode { width: 80px; }
+      #configBtn.dirty::after { content: '•'; color: #64748b; margin-left: 6px; }
+      .btn-group { display: inline-flex; border:1px solid #ddd; border-radius:6px; overflow:hidden; }
+      .btn-group button { padding:4px 8px; border:0; background:#f7f7f7; cursor:pointer; font-size:11px; }
+      .btn-group button.active { background:#64748b; color:#fff; }
+      .btn-group img { width:18px; height:18px; display:block; }
+      .btn-group.btn-lg button { padding:8px 12px; font-size:12px; }
+      .cs-row { display:flex; flex-wrap: wrap; gap:8px; align-items:flex-start; }
+      .cs-row > div, .cs-row > label { flex: 0 0 auto; }
+      .cs-row > label[style*="flex:1"], .cs-row .cs-name-wrap { min-width: 220px; }
+      .cs-field { display:flex; flex-direction: column; gap:4px; }
+      .cs-linebreak { flex-basis: 100%; height: 0; }
+      .cs-width-wrap { overflow: hidden; transition: opacity .15s ease, max-width .2s ease, margin .2s ease; }
+      .cs-row.is-fill .cs-width-wrap { opacity: 0; max-width: 0; margin: 0; pointer-events: none; }
+      .fullw { width: 100%; }
+    </style>
+    <div id="configView" class="view hidden">
+      <div id="configHeader" style="position: sticky; top: 0; background: #fff; border-bottom: 1px solid #eee; padding: 8px 12px; z-index: 5;">
+        <div style="display:flex; align-items:center; justify-content: space-between; gap:8px;">
+          <div style="display:flex; gap:8px; align-items:center;">
+            <button id="backBtn">Back</button>
+            <strong id="configTitle">Column Configuration</strong>
+          </div>
+          <button id="doneBtn" class="primary">Done</button>
+        </div>
+      </div>
+      <div class="stack" id="tableConfig" style="display:block; max-width: 860px; margin: 0 auto; padding-right: 12px; padding-bottom: 56px;">
+        <div class="row">
+          <label>Columns
+            <input id="tableColumns" type="number" min="1" max="50" />
+          </label>
+          <label>Key column
+            <input id="tableKey" type="text" placeholder="e.g. id or name" />
+          </label>
+        </div>
+        <div class="row">
+          <label>Target width (px)
+            <input id="tableTargetWidth" type="number" value="1200" min="200" max="10000" />
+          </label>
+          <div></div>
+        </div>
+        <div class="row">
+          <div class="small">Column Setup</div>
+          <div id="widthSummary" class="small muted" style="text-align:right"></div>
+        </div>
+        <div id="colSetupList" class="stack"></div>
+        <div class="row">
+          <div style="display:flex; gap:8px; align-items:center">
+            <button id="addColBtn">Add column</button>
+            <button id="captureSpecsBtn" title="Capture specs from selected table">Capture from selection</button>
+          </div>
+          <div style="display:flex; gap:8px; justify-content:flex-end">
+            <button id="redistributeBtn">Redistribute widths</button>
+            <button id="fitColsBtn">Fit columns</button>
+            <button id="fitColsPreserveBtn">Fit (preserve fill)</button>
+            <button id="autoColsBtn">Auto-populate from headers</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="small">Typography</div>
+          <div></div>
+        </div>
+        <div class="grid-3">
+          <label>Header Family <input id="typoHeaderFamily" type="text" placeholder="e.g. Inter" /></label>
+          <label>Header Style <input id="typoHeaderStyle" type="text" placeholder="e.g. Medium" /></label>
+          <label>Header Size <input id="typoHeaderSize" type="number" value="12" min="8" max="64" /></label>
+        </div>
+        <div class="grid-3">
+          <label>Body Family <input id="typoBodyFamily" type="text" placeholder="e.g. Inter" /></label>
+          <label>Body Style <input id="typoBodyStyle" type="text" placeholder="e.g. Regular" /></label>
+          <label>Body Size <input id="typoBodySize" type="number" value="12" min="8" max="64" /></label>
+        </div>
+        <div class="small muted">Tip: Use Column Setup rows to define symbols, widths, and behavior. You can capture a different component per symbol column.</div>
+        <div style="position: sticky; bottom: 0; background: #fff; border-top:1px solid #eee; padding:8px 12px; display:flex; gap:8px; justify-content:space-between; align-items:center;">
+          <button id="copyHeadersBtn">Copy headers CSV</button>
+          <button id="applyConfigBtn">Apply to selection</button>
+        </div>
+      </div>
+      <div class="stack" id="cardConfig" style="display:none; max-width:860px; margin:0 auto; padding-right:12px; padding-bottom:56px;">
+        <div class="small">Card Configuration</div>
+        <div id="cardConfigBody" class="stack"></div>
+        <div class="row">
+          <div class="small">Card Size</div>
+          <div></div>
+        </div>
+        <div class="row" id="cardSizeRow">
+          <div class="cs-field">
+            <div class="small muted">Mode</div>
+            <div class="btn-group ls-size-group" role="radiogroup" aria-label="Size mode"><button type="button" data-val="px" class="active" role="radio" aria-checked="true" tabindex="0">px</button><button type="button" data-val="fill" role="radio" aria-checked="false" tabindex="-1">fill</button></div>
+            <input type="hidden" id="ls-size-mode" value="px" />
+          </div>
+          <label>Width <input id="ls-width" type="number" min="10" max="5000" value="240" /></label>
+          <label>Height <input id="ls-height" type="number" min="10" max="5000" value="140" /></label>
+        </div>
+        <div class="row">
+          <div class="small">Layer Setup</div>
+          <div id="cardLayerSummary" class="small muted" style="text-align:right"></div>
+        </div>
+        <div id="cardLayerList" class="stack"></div>
+        <div class="row">
+          <button id="addLayerBtn">Add layer</button>
+          <div style="display:flex; gap:8px; justify-content:flex-end">
+            <button id="cardApplyBtn" class="primary">Apply</button>
+          </div>
+        </div>
+        <div class="small muted">Edit card fields here, then Generate/Apply.</div>
+
+        <!-- Card CSV tools for LLM prompt building -->
+        <div class="stack" id="cardSchemaWrap" style="margin-top:12px;">
+          <div class="row">
+            <div class="small">Card CSV</div>
+            <div style="text-align:right">
+              <button id="cardBuildSchemaBtn" title="Build CSV with headers from configured layers">Build from layers</button>
+              <button id="cardCaptureCsvBtn" title="Use last captured selection (Cards) to output CSV">Capture from selection</button>
+            </div>
+          </div>
+          <textarea id="cardSchemaOut" class="mono" style="min-height:96px" placeholder="CSV will appear here (headers + sample row)"></textarea>
+          <div class="row">
+            <button id="cardCopySchemaBtn">Copy</button>
+            <button id="cardDownloadSchemaBtn">Download</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="confirmModal" style="display:none; position:fixed; inset:0; background: rgba(0,0,0,0.3); z-index:10; align-items:center; justify-content:center;">
+      <div style="background:#fff; padding:16px; border:1px solid #ddd; border-radius:8px; width:320px;">
+        <div style="font-weight:600; margin-bottom:8px;">Discard changes?</div>
+        <div class="small" style="margin-bottom:12px;">You have unsaved changes in Column Configuration.</div>
+        <div style="display:flex; gap:8px; justify-content:flex-end;">
+          <button id="cancelDiscardBtn">Cancel</button>
+          <button id="confirmDiscardBtn" class="primary">Discard</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      function requestResize() {
+        try {
+          const w = Math.max(360, Math.min(720, document.documentElement.clientWidth || 420));
+          const h = Math.max(240, Math.min(760, document.body.scrollHeight + 12));
+          parent.postMessage({ pluginMessage: { type: 'resize', width: w, height: h } }, '*');
+        } catch (_) {}
+      }
+      (function initDragResize(){
+        const handle = document.getElementById('resizeHandle');
+        if (!handle) return;
+        let startX=0, startY=0, startW=420, startH=540;
+        function move(e){
+          const dx = e.clientX - startX; const dy = e.clientY - startY;
+          const w = Math.max(320, Math.min(720, startW + dx));
+          const h = Math.max(240, Math.min(760, startH + dy));
+          parent.postMessage({ pluginMessage: { type: 'resize', width: w, height: h } }, '*');
+          e.preventDefault();
+        }
+        function up(){ window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); }
+        handle.addEventListener('mousedown', (e)=>{
+          startX = e.clientX; startY = e.clientY; startW = window.innerWidth; startH = window.innerHeight;
+          window.addEventListener('mousemove', move); window.addEventListener('mouseup', up); e.preventDefault();
+        });
+      })();
+
+      function autoDetectDelimiter(text) {
+        const candidates = [',', '\\t', ';', '|'];
+        let best = ',', bestScore = -1;
+        const lines = text.split(/\r?\n/).slice(0, 5).filter(Boolean);
+        for (const d of candidates) {
+          let score = 0;
+          let prevCount = null;
+          for (const l of lines) {
+            const parts = l.split(d === '\\t' ? '\\t' : d);
+            if (prevCount == null) prevCount = parts.length;
+            if (parts.length === prevCount && parts.length > 1) score++;
+          }
+          if (score > bestScore) { bestScore = score; best = d; }
+        }
+        return best;
+      }
+
+      function parseCSV(text, delimiter, hasHeader) {
+        // Simple CSV/TSV parser with quoted fields
+        const d = delimiter === 'auto' ? autoDetectDelimiter(text) : delimiter;
+        const rows = [];
+        let i = 0, field = '', inQuotes = false, row = [];
+        const pushField = () => { row.push(field); field = ''; };
+        const pushRow = () => { rows.push(row); row = []; };
+        while (i < text.length) {
+          const ch = text[i];
+          if (inQuotes) {
+            if (ch === '"') {
+              if (text[i+1] === '"') { field += '"'; i += 2; continue; }
+              inQuotes = false; i++; continue;
+            }
+            field += ch; i++; continue;
+          }
+          if (ch === '"') { inQuotes = true; i++; continue; }
+          if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+          if (ch === '\r') { i++; continue; }
+          const delim = d === '\\t' ? '\t' : d;
+          if (ch === delim) { pushField(); i++; continue; }
+          field += ch; i++;
+        }
+        // Flush
+        pushField(); if (row.length) pushRow();
+
+        const clean = rows.filter(r => r.length && !(r.length === 1 && r[0].trim() === ''));
+        let headers = [];
+        let dataRows = [];
+        if (hasHeader && clean.length) {
+          headers = clean[0].map(function(h){ return h.trim(); });
+          dataRows = clean.slice(1).map(function(r){
+            var obj = {};
+            for (var i2=0;i2<headers.length;i2++) obj[headers[i2]] = (r[i2] == null ? '' : r[i2]);
+            return obj;
+          });
+        } else {
+          // Create synthetic headers
+          var maxLen = 0; for (var ci=0; ci<clean.length; ci++) if (clean[ci].length>maxLen) maxLen = clean[ci].length;
+          headers = [];
+          for (var j=0;j<maxLen;j++) headers.push('col_' + (j+1));
+          dataRows = clean.map(function(r){
+            var obj = {};
+            for (var i3=0;i3<headers.length;i3++) obj[headers[i3]] = (r[i3] == null ? '' : r[i3]);
+            return obj;
+          });
+        }
+        return { delimiter: d, headers, rows: dataRows };
+      }
+      function inferKey(headers, rows) {
+        if (!headers || !headers.length || !rows || !rows.length) return null;
+        const preferred = ['id','key','uid','uuid','name','title'];
+        const allCols = headers.map(h => String(h));
+        const sets = new Map(allCols.map(h => [h, new Set()]));
+        for (const r of rows) {
+          for (const h of allCols) sets.get(h).add((r[h] == null ? '' : String(r[h]).trim()));
+        }
+        function isUnique(h){ const s = sets.get(h); return s && s.size === rows.length; }
+        for (const p of preferred){ const h = allCols.find(x => x.toLowerCase() === p); if (h && isUnique(h)) return h; }
+        let best=null, bestRatio=0; for (const h of allCols){ const s=sets.get(h); const ratio=(s?s.size:0)/rows.length; if (ratio>bestRatio){bestRatio=ratio; best=h;} }
+        return bestRatio>=0.9? best : null;
+      }
+
+      function renderPreview(){ /* removed */ }
+
+      // Mode toggle wiring
+      (function(){
+        var g = document.getElementById('modeGroup'); var hidden = document.getElementById('modeVal');
+        if (g && hidden) {
+          function activate(btn){
+            Array.from(g.querySelectorAll('button')).forEach(function(x){ x.classList.remove('active'); x.setAttribute('tabindex','-1'); x.setAttribute('aria-checked','false');});
+            btn.classList.add('active'); btn.setAttribute('tabindex','0'); btn.setAttribute('aria-checked','true'); btn.focus();
+            hidden.value = btn.getAttribute('data-val') || hidden.value;
+            updateOptionVisibility();
+          }
+          g.addEventListener('click', function(e){ var b=e.target&&e.target.closest('button'); if(!b)return; activate(b); });
+          g.addEventListener('keydown', function(e){
+            var active = g.querySelector('button.active'); var buttons = Array.from(g.querySelectorAll('button'));
+            var idx = buttons.indexOf(active);
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+              e.preventDefault();
+              var dir = e.key === 'ArrowRight' ? 1 : -1; var ni = (idx + dir + buttons.length) % buttons.length; activate(buttons[ni]);
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault(); activate(active);
+            }
+          });
+        }
+      })();
+
+      function getOptions() {
+        const mode = (document.getElementById('modeVal') && document.getElementById('modeVal').value) || 'table';
+        const hasHeader = $('hasHeader').checked;
+        const delimiter = 'auto';
+        const text = $('input').value.trim();
+        if (!text) return { mode, headers: [], rows: [], options: {} };
+        const { headers, rows } = parseCSV(text, delimiter, hasHeader);
+        function hexToRgbF(hex){
+          try {
+            const s = String(hex||'').trim(); if (!s) return null;
+            const m = s.replace('#','');
+            const v = m.length===3 ? m.split('').map(ch=>ch+ch).join('') : m;
+            const r = parseInt(v.slice(0,2),16)/255, g=parseInt(v.slice(2,4),16)/255, b=parseInt(v.slice(4,6),16)/255;
+            if (isNaN(r)||isNaN(g)||isNaN(b)) return null; return { r, g, b };
+          } catch(_) { return null; }
+        }
+        if (mode === 'table' && (!($('tableKey').value||'').trim())) {
+          const k = inferKey(headers, rows);
+          if (k) { $('tableKey').value = k; const el = document.getElementById('hint'); if (el) el.textContent = `Inferred key column: ${k}`; }
+        }
+        const tableOptions = {
+          header: $('headerRow').checked,
+          zebra: $('zebra').checked,
+          rowGap: 2,
+          columnGap: 16,
+          cellPadding: 8,
+          textLines: 1,
+          bodyScrollable: (document.getElementById('bodyScrollable') && document.getElementById('bodyScrollable').checked) || false,
+          bodyHeight: parseInt(((document.getElementById('bodyHeight')||{}).value || '400'), 10) || 400,
+          columnsCount: parseInt(($('tableColumns').value || '0'), 10) || null,
+          keyColumn: ($('tableKey').value || '').trim() || null,
+          targetWidth: parseInt(($('tableTargetWidth').value || '1200'), 10) || 1200,
+          symbols: [],
+          headerBg: hexToRgbF((document.getElementById('colHeaderBg')||{}).value || '#F2F5FA') || undefined,
+          zebraBg: hexToRgbF((document.getElementById('colZebraBg')||{}).value || '#FAFAFA') || undefined,
+          headerTextColor: hexToRgbF((document.getElementById('colHeaderText')||{}).value || '#1F1F2E') || undefined,
+          textColor: hexToRgbF((document.getElementById('colBodyText')||{}).value || '#1F1F24') || undefined,
+          typography: {
+            headerFamily: ($('typoHeaderFamily').value || '').trim() || null,
+            headerStyle: ($('typoHeaderStyle').value || '').trim() || null,
+            headerSize: parseInt(($('typoHeaderSize').value || '12'), 10) || 12,
+            bodyFamily: ($('typoBodyFamily').value || '').trim() || null,
+            bodyStyle: ($('typoBodyStyle').value || '').trim() || null,
+            bodySize: parseInt(($('typoBodySize').value || '12'), 10) || 12
+          },
+          columnSetup: serializeColSetup()
+        };
+        const cardOptions = {
+          imageField: (($('imageField').value || '').trim()) || null,
+          imageLayer: (($('imageLayer').value || 'image').trim()) || 'image',
+          cardType: $('cardType').value,
+          symbolProp: (document.getElementById('cardSymbolProp').value || 'State').trim() || 'State',
+          symbolHideBlank: document.getElementById('cardSymbolHideBlank').checked || false,
+          symbolMappings: (function(){
+            var raw = (document.getElementById('cardSymbolMap').value || '').trim();
+            if (!raw) return null;
+            var map = {}; var parts = raw.split(';');
+            for (var i=0;i<parts.length;i++){ var kv = parts[i].split('='); if (kv[0] && kv[1]) map[kv[0].trim()] = kv[1].trim(); }
+            return map;
+          })()
+        };
+        const useAnyVar = $('useVars').checked || (document.getElementById('varHeaderText') && document.getElementById('varHeaderText').value.trim()) || (document.getElementById('varBodyText') && document.getElementById('varBodyText').value.trim());
+        const vars = useAnyVar ? {
+          headerBg: ($('varHeaderBg').value.trim() || null),
+          headerText: ($('varHeaderText').value.trim() || null),
+          bodyText: ($('varBodyText').value.trim() || null),
+        } : null;
+        const options = mode === 'table' ? tableOptions : cardOptions;
+        if (vars) options.variables = vars;
+        return { mode, headers, rows, options };
+      }
+
+      // Load captured selection (headers/rows/options) back into UI for editing
+      function loadCaptured(payload){
+        try {
+          if (!payload) return;
+          // Respect captured mode (table or cards)
+          var mv = document.getElementById('modeVal'); if (mv) mv.value = payload.mode || 'table';
+          updateOptionVisibility();
+          // Build CSV for textarea
+          const headers = payload.headers || [];
+          const rows = payload.rows || [];
+          const toCSV = arr => arr.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v)).join(',');
+          const csv = [toCSV(headers)].concat(rows.map(r => toCSV(headers.map(h => r[h])))).join('\n');
+          var ta = document.getElementById('input');
+          if (ta) { ta.value = csv; } else { try { if (window.__logDebug) window.__logDebug('UI capture: textarea #input not found'); } catch(_) {} }
+          var hh = document.getElementById('hasHeader'); if (hh) hh.checked = true;
+          const opt = payload.options || {};
+          if ((payload.mode||'table') === 'table') {
+            // Show table size summary
+            var cap = document.getElementById('captureInfo'); if (cap) cap.style.display = '';
+            var ts = document.getElementById('tableSizeInfo'); if (ts) { ts.style.display = ''; var s = payload.tableSize || {}; ts.textContent = `Table: ${s.width||payload.targetWidth||''} × ${s.height||''}`; }
+            var csw = document.getElementById('cardSizesWrap'); if (csw) csw.style.display = 'none';
+            var lsw = document.getElementById('layerSizesWrap'); if (lsw) lsw.style.display = 'none';
+            var hdr = document.getElementById('headerRow'); if (hdr) hdr.checked = !!opt.header;
+            var zeb = document.getElementById('zebra'); if (zeb) zeb.checked = !!opt.zebra;
+            var bsc = document.getElementById('bodyScrollable'); if (bsc) bsc.checked = !!opt.bodyScrollable;
+            var bh = document.getElementById('bodyHeight'); if (bh && opt.bodyHeight) bh.value = opt.bodyHeight;
+            var tc = document.getElementById('tableColumns'); if (tc) tc.value = headers.length;
+            var tw = document.getElementById('tableTargetWidth'); if (tw && payload.targetWidth) tw.value = payload.targetWidth;
+            // Typography
+            var thf = document.getElementById('typoHeaderFamily'); if (thf) thf.value = (opt.typography && opt.typography.headerFamily) || '';
+            var ths = document.getElementById('typoHeaderStyle'); if (ths) ths.value = (opt.typography && opt.typography.headerStyle) || '';
+            var thz = document.getElementById('typoHeaderSize'); if (thz) thz.value = (opt.typography && opt.typography.headerSize) || 12;
+            var tbf = document.getElementById('typoBodyFamily'); if (tbf) tbf.value = (opt.typography && opt.typography.bodyFamily) || '';
+            var tbs = document.getElementById('typoBodyStyle'); if (tbs) tbs.value = (opt.typography && opt.typography.bodyStyle) || '';
+            var tbz = document.getElementById('typoBodySize'); if (tbz) tbz.value = (opt.typography && opt.typography.bodySize) || 12;
+            // Column setup
+            if (Array.isArray(opt.columnSetup) && opt.columnSetup.length) {
+              loadColSetup(opt.columnSetup);
+            } else if (headers && headers.length) {
+              populateColSetup(headers);
+            }
+          } else {
+            // Cards capture: set card options where applicable
+            var cap2 = document.getElementById('captureInfo'); if (cap2) cap2.style.display = '';
+            var tsi = document.getElementById('tableSizeInfo'); if (tsi) tsi.style.display = 'none';
+            var csw2 = document.getElementById('cardSizesWrap'); if (csw2) csw2.style.display = '';
+            var list = document.getElementById('cardSizesList'); if (list) {
+              const sizes = payload.cardSizes || [];
+              list.innerHTML = sizes.map(s => `${(s.name||'Card')}: ${s.width||''} × ${s.height||''}`).join(' \u2022 ');
+            }
+            var lsw2 = document.getElementById('layerSizesWrap'); if (lsw2) lsw2.style.display = '';
+            var layerList = document.getElementById('layerSizesList'); if (layerList) {
+              const layers = (opt.layerSetup||[]);
+              layerList.innerHTML = layers.map(l => `${l.name}: ${l.width||''}`).join(' \u2022 ');
+            }
+            var sp = document.getElementById('cardSymbolProp'); if (sp && opt.symbolProp) sp.value = opt.symbolProp;
+            var sm = document.getElementById('cardSymbolMap'); if (sm && opt.symbolMappings) { try { sm.value = Object.entries(opt.symbolMappings).map(([k,v])=>`${k}=${v}`).join(';'); } catch(_) {} }
+            var il = document.getElementById('imageLayer'); if (il && opt.imageLayer) il.value = opt.imageLayer;
+            var ifl = document.getElementById('imageField'); if (ifl && opt.imageField) ifl.value = opt.imageField;
+            // Also render layer widths in Card Configuration view
+            try {
+              var cfgBody = document.getElementById('cardConfigBody');
+              if (cfgBody) {
+                var sec = document.getElementById('cardLayerWidthsCfg');
+                if (!sec) {
+                  sec = document.createElement('div');
+                  sec.id = 'cardLayerWidthsCfg';
+                  sec.className = 'stack';
+                  cfgBody.appendChild(sec);
+                }
+                const layers = (opt.layerSetup||[]);
+                sec.innerHTML = `<div class="small">Layer widths (first card)</div><div class="small muted">${layers.map(l=>`${l.name}: ${l.width||''}`).join(' \u2022 ')}</div>`;
+              }
+            } catch(_){}
+
+            // Populate Card CSV textarea with captured data (headers + captured rows)
+            try {
+              var cardOut = document.getElementById('cardSchemaOut');
+              if (cardOut) {
+                const headers2 = payload.headers || [];
+                const rows2 = payload.rows || [];
+                const toCSV2 = arr => arr.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v)).join(',');
+                const csv2 = [toCSV2(headers2)].concat(rows2.map(r => toCSV2(headers2.map(h => r[h])))).join('\n');
+                cardOut.value = csv2;
+              }
+            } catch(_){}
+          }
+        } catch (_) {}
+        requestResize();
+      }
+
+function updateOptionVisibility() {
+  var mv = document.getElementById('modeVal');
+  const mode = (mv && mv.value) ? mv.value : 'table';
+  const isTable = mode === 'table';
+  const isCards = mode === 'cards';
+  document.getElementById('tableOptions').style.display = isTable ? '' : 'none';
+  document.getElementById('tableScrollOpts').style.display = isTable ? '' : 'none';
+  document.getElementById('tableConfig').style.display = isTable ? '' : 'none';
+  document.getElementById('cardOptions').style.display = isCards ? '' : 'none';
+  document.getElementById('cardImageOptions').style.display = isCards ? '' : 'none';
+  document.getElementById('cardTypeOptions').style.display = isCards ? '' : 'none';
+  document.getElementById('cardSymbolOptions').style.display = isCards ? '' : 'none';
+  document.getElementById('cardSymbolMapRow').style.display = isCards ? '' : 'none';
+  var hr = document.getElementById('hasHeaderRow'); if (hr) hr.style.display = isCards ? 'none' : '';
+  var cfgBtn = document.getElementById('configBtn'); if (cfgBtn) { cfgBtn.style.display = ''; cfgBtn.textContent = isCards ? 'Configure Card' : 'Configure Columns'; }
+
+  // Color vars vs pickers
+  var useVars = document.getElementById('useVars');
+  var showVars = useVars && useVars.checked;
+  var varsSec = document.getElementById('colorVarsSection');
+  var picksSec = document.getElementById('colorPickersSection');
+  if (varsSec) varsSec.style.display = showVars ? '' : 'none';
+  if (picksSec) picksSec.style.display = showVars ? 'none' : '';
+
+  // Hide header-related colors when header off, and zebra color when zebra off
+  var headerOn = (document.getElementById('headerRow') && document.getElementById('headerRow').checked);
+  var zebraOn = (document.getElementById('zebra') && document.getElementById('zebra').checked);
+  var el;
+  el = document.getElementById('colorHeaderBgRow'); if (el) el.style.display = headerOn ? '' : 'none';
+  el = document.getElementById('colorHeaderTextRow'); if (el) el.style.display = headerOn ? '' : 'none';
+  el = document.getElementById('varHeaderBgRow'); if (el) el.style.display = (showVars && headerOn) ? '' : 'none';
+  el = document.getElementById('varHeaderTextRow'); if (el) el.style.display = (showVars && headerOn) ? '' : 'none';
+  el = document.getElementById('zebraColorRow'); if (el) el.style.display = zebraOn ? '' : 'none';
+}
+
+      // Symbol enable toggle
+      document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'symbolEnable') {
+          document.getElementById('symbolRow').style.display = e.target.checked ? '' : 'none';
+          requestResize();
+        }
+      });
+
+      // Initialize view once
+      updateOptionVisibility();
+      (function initColorVars(){
+        var uv = document.getElementById('useVars');
+        if (uv && uv.checked) {
+          parent.postMessage({ pluginMessage: { type: 'getVariables' } }, '*');
+        }
+      })();
+
+      // Resize throttled on window resize only
+      // window resize ignored
+
+      // (legacy symbol UI removed)
+
+      // preview button removed
+
+      // ----- File import (button + drag/drop) -----
+      (function setupImport(){
+        const inputEl = document.createElement('input');
+        inputEl.type = 'file';
+        inputEl.accept = '.csv,.tsv,.txt,text/csv,text/tab-separated-values';
+        inputEl.style.display = 'none';
+        document.body.appendChild(inputEl);
+        async function readFileAsText(file){
+          return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result||''));
+            reader.onerror = reject;
+            reader.readAsText(file);
+          });
+        }
+        $('importBtn').addEventListener('click', ()=> inputEl.click());
+        inputEl.addEventListener('change', async ()=>{
+          const f = inputEl.files && inputEl.files[0];
+          if (!f) return;
+          try {
+            const text = await readFileAsText(f);
+            let ta = document.getElementById('input');
+            if (!ta) ta = document.querySelector('textarea#input');
+            if (ta) { ta.value = text; } else { try { if (window.__logDebug) window.__logDebug('UI import: textarea #input not found'); } catch(_) {} }
+            // Provide quick parse summary for debug
+            const parsed = parseCSV(text, 'auto', (document.getElementById('hasHeader')||{}).checked);
+            const headers = parsed.headers || [], rows = parsed.rows || [];
+            if (rows.length) { populateColSetup(headers); }
+            const h = document.getElementById('hint'); if (h) h.textContent = `Imported ${rows.length} row(s), ${headers.length} header(s).`;
+            try { if (window.__logDebug) window.__logDebug({ where:'ui.import', bytes: text.length, headers: headers.length, rows: rows.length }); } catch(_) {}
+          } catch (e) {
+            alert('Failed to read file: ' + (e && e.message ? e.message : String(e)));
+          }
+          requestResize();
+          inputEl.value = '';
+        });
+        const ta = $('input');
+        ta.addEventListener('dragover', (e)=>{ e.preventDefault(); ta.style.outline = '2px dashed #64748b'; });
+        ta.addEventListener('dragleave', ()=>{ ta.style.outline = ''; });
+        ta.addEventListener('drop', async (e)=>{
+          e.preventDefault(); ta.style.outline='';
+          const dt = e.dataTransfer; if (!dt || !dt.files || dt.files.length === 0) return;
+          const file = Array.from(dt.files).find(f => /\.(csv|tsv|txt)$/i.test(f.name) || (f.type && /csv|tab/.test(f.type)) ) || dt.files[0];
+          try {
+            const text = await readFileAsText(file);
+            let area = document.getElementById('input'); if (!area) area = document.querySelector('textarea#input'); if (area) area.value = text;
+            const parsed = parseCSV(text, 'auto', (document.getElementById('hasHeader')||{}).checked);
+            const headers = parsed.headers || [], rows = parsed.rows || [];
+            if (rows.length) { populateColSetup(headers); }
+            const h = document.getElementById('hint'); if (h) h.textContent = `Imported ${rows.length} row(s), ${headers.length} header(s).`;
+            try { if (window.__logDebug) window.__logDebug({ where:'ui.drop', bytes: text.length, headers: headers.length, rows: rows.length }); } catch(_) {}
+          } catch (e2) {
+            alert('Failed to read dropped file: ' + (e2 && e2.message ? e2.message : String(e2)));
+          }
+          requestResize();
+        });
+      })();
+
+      // ----- Column Setup builder -----
+      function addColSetupRow(prefill){
+        const row = document.createElement('div');
+        row.className = 'row cs-row';
+        row.innerHTML = `
+          <div class="cs-field cs-name-wrap" style="flex:1 1 220px">
+            <div class="small muted">Name</div>
+            <input type="text" class="cs-name" placeholder="header name" />
+          </div>
+          <div class="cs-field">
+            <div class="small muted">Type</div>
+            <div class="btn-group cs-type-group" role="radiogroup" aria-label="Type"><button type="button" data-val="text" class="active" title="Text" aria-label="Text" role="radio" aria-checked="true" tabindex="0">Text</button><button type="button" data-val="symbol" title="Symbol" aria-label="Symbol" role="radio" aria-checked="false" tabindex="-1">Symbol</button></div>
+            <input type="hidden" class="cs-type" value="text" />
+          </div>
+          <div class="cs-field">
+            <div class="small muted">Mode</div>
+            <div class="btn-group cs-mode-group" role="radiogroup" aria-label="Width mode"><button type="button" data-val="px" class="active" title="Pixels" aria-label="Pixels" role="radio" aria-checked="true" tabindex="0">px</button><button type="button" data-val="fill" title="Fill" aria-label="Fill" role="radio" aria-checked="false" tabindex="-1">fill</button></div>
+            <input type="hidden" class="cs-mode" value="px" />
+          </div>
+          <div class="cs-field cs-align-wrap">
+            <div class="small muted">Align</div>
+            <div class="btn-group cs-align-group" role="radiogroup" aria-label="Align"><button type="button" data-val="LEFT" class="active" title="Left" aria-label="Left" role="radio" aria-checked="true" tabindex="0">Left</button><button type="button" data-val="CENTER" title="Center" aria-label="Center" role="radio" aria-checked="false" tabindex="-1">Center</button><button type="button" data-val="RIGHT" title="Right" aria-label="Right" role="radio" aria-checked="false" tabindex="-1">Right</button></div>
+            <input type="hidden" class="cs-align" value="LEFT" />
+          </div>
+          <div class="cs-linebreak"></div>
+          <div class="cs-field cs-width-wrap">
+            <div class="small muted">Width</div>
+            <input type="number" class="cs-width" value="160" min="40" max="2000" />
+          </div>
+        `;
+        const sym = document.createElement('div');
+        sym.className = 'stack';
+        sym.style.display = 'none';
+        sym.style.border = '1px dashed #eee';
+        sym.style.padding = '8px';
+        sym.style.borderRadius = '6px';
+        sym.innerHTML = `
+          <div class="row">
+            <label>Variant property <input type="text" class="cs-prop" value="State" /></label>
+            <label>Mappings (csv=mapped) <input type="text" class="cs-map" placeholder="success=Success;warning=Warning;error=Error" /></label>
+          </div>
+          <label><input type="checkbox" class="cs-only" /> Only on error</label>
+          <div class="row">
+            <label><input type="checkbox" class="cs-onlymap" /> Only show when mapped</label>
+            <button class="cs-error-preset">Error-only preset</button>
+          </div>
+          <div class="row">
+            <button class="cs-capture">Use current selection</button>
+            <div class="small muted">Component: <span class="cs-comp-name">none</span></div>
+          </div>
+          <input type="hidden" class="cs-comp-id" />
+        `;
+        const controls = document.createElement('div');
+        controls.className = 'row';
+        controls.innerHTML = `<button class="cs-remove">Remove</button><div></div>`;
+        const list = document.getElementById('colSetupList');
+        const wrapper = document.createElement('div');
+        wrapper.className = 'stack';
+        wrapper.appendChild(row);
+        wrapper.appendChild(sym);
+        wrapper.appendChild(controls);
+        list.appendChild(wrapper);
+
+        function wireToggle(groupSelector, hiddenSelector){
+          const g = row.querySelector(groupSelector); const hidden = row.querySelector(hiddenSelector);
+          if (!g || !hidden) return;
+          g.addEventListener('click', (e)=>{
+            const btn = e.target && e.target.closest('button'); if (!btn) return;
+            Array.from(g.querySelectorAll('button')).forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-checked','false'); b.setAttribute('tabindex','-1'); });
+            btn.classList.add('active'); btn.setAttribute('aria-checked','true'); btn.setAttribute('tabindex','0'); hidden.value = btn.getAttribute('data-val') || hidden.value; markDirty();
+            if (groupSelector === '.cs-type-group') syncSymbolVisibility();
+            recalcWidthWarning();
+          });
+          g.addEventListener('keydown', function(e){
+            const buttons = Array.from(g.querySelectorAll('button'));
+            const active = g.querySelector('button.active') || buttons[0];
+            const idx = buttons.indexOf(active);
+            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+              e.preventDefault();
+              const dir = e.key === 'ArrowRight' ? 1 : -1; const ni = (idx + dir + buttons.length) % buttons.length;
+              buttons[ni].click();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault(); active.click();
+            }
+          });
+        }
+        function syncSymbolVisibility(){
+          const t = row.querySelector('.cs-type').value;
+          sym.style.display = (t === 'symbol') ? '' : 'none'; requestResize();
+        }
+        wireToggle('.cs-type-group', '.cs-type');
+        wireToggle('.cs-mode-group', '.cs-mode');
+        // Hide width when fill mode is active (with fade/slide)
+        function syncModeState(){
+          const mEl = row.querySelector('.cs-mode');
+          const mode = mEl ? mEl.value : 'px';
+          row.classList.toggle('is-fill', mode === 'fill');
+        }
+        const modeGroupEl = row.querySelector('.cs-mode-group');
+        if (modeGroupEl) {
+          modeGroupEl.addEventListener('click', syncModeState);
+          modeGroupEl.addEventListener('keydown', (e)=>{
+            if (e.key === 'Enter' || e.key === ' ') syncModeState();
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') setTimeout(syncModeState, 0);
+          });
+        }
+        syncModeState();
+        wireToggle('.cs-align-group', '.cs-align');
+        syncSymbolVisibility();
+
+        const removeBtn = controls.querySelector('.cs-remove'); if (removeBtn) removeBtn.addEventListener('click', ()=>{ wrapper.remove(); recalcWidthWarning(); requestResize(); });
+        ['cs-width'].forEach(cls => { const el = row.querySelector('.'+cls); if (el) el.addEventListener('input', ()=>{ recalcWidthWarning(); markDirty(); }); });
+        const errBtn = sym.querySelector('.cs-error-preset'); if (errBtn) errBtn.addEventListener('click', ()=>{ const mapEl = sym.querySelector('.cs-map'); if (mapEl) mapEl.value = 'error=Error;fail=Error;failure=Error;critical=Critical'; const onlyMap = sym.querySelector('.cs-onlymap'); if (onlyMap) onlyMap.checked = true; requestResize(); });
+        wrapper.dataset.colId = Date.now().toString() + Math.random().toString(36).slice(2,6);
+        const capBtn = sym.querySelector('.cs-capture'); if (capBtn) capBtn.addEventListener('click', ()=>{ parent.postMessage({ pluginMessage: { type: 'captureColumnComponent', id: wrapper.dataset.colId } }, '*'); });
+
+        if (prefill) {
+          row.querySelector('.cs-name').value = prefill.name || '';
+          row.querySelector('.cs-type').value = prefill.type || 'text';
+          Array.from(row.querySelectorAll('.cs-type-group button')).forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-val') === row.querySelector('.cs-type').value); });
+          row.querySelector('.cs-width').value = prefill.width != null ? prefill.width : 160;
+          row.querySelector('.cs-mode').value = prefill.mode || 'px';
+          Array.from(row.querySelectorAll('.cs-mode-group button')).forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-val') === row.querySelector('.cs-mode').value); });
+          if (prefill.onlyError) sym.querySelector('.cs-only').checked = true;
+          if (prefill.align) { row.querySelector('.cs-align').value = prefill.align; Array.from(row.querySelectorAll('.cs-align-group button')).forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-val') === prefill.align); }); }
+          if (prefill.prop) sym.querySelector('.cs-prop').value = prefill.prop;
+          if (prefill.mappings) { const arr=[]; for (const k in prefill.mappings) arr.push(k+'='+prefill.mappings[k]); sym.querySelector('.cs-map').value = arr.join(';'); }
+          if (prefill.onlyWhenMapped) sym.querySelector('.cs-onlymap').checked = true;
+          if (prefill.componentId) { sym.querySelector('.cs-comp-id').value = prefill.componentId; sym.querySelector('.cs-comp-name').textContent = prefill.componentName || 'captured'; }
+          syncSymbolVisibility();
+        }
+        recalcWidthWarning();
+      }
+      function populateColSetup(headers){
+        const list = document.getElementById('colSetupList');
+        list.innerHTML = '';
+        // Auto-uniform widths
+        var target = parseInt((document.getElementById('tableTargetWidth').value||'1200'),10)||1200;
+        var per = headers && headers.length ? Math.max(40, Math.floor(target / headers.length)) : 160;
+        headers.forEach(h => addColSetupRow({ name: h, type: 'text', width: per, mode: 'px' }));
+        }
+      function loadColSetup(items){
+        const list = document.getElementById('colSetupList');
+        list.innerHTML = '';
+        items.forEach(it => addColSetupRow(it));
+        recalcWidthWarning();
+      }
+      function serializeColSetup(){
+        const stacks = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+        return stacks.map(w => {
+          const r = w.querySelector('.row');
+          const sym = w.querySelector('.stack');
+          const name = r.querySelector('.cs-name').value.trim();
+          const type = r.querySelector('.cs-type').value;
+          const width = parseInt(r.querySelector('.cs-width').value||'160',10)||160;
+          const mode = r.querySelector('.cs-mode').value;
+          const onlyErrorEl = sym.querySelector('.cs-only');
+          const onlyError = onlyErrorEl ? !!onlyErrorEl.checked : false;
+          const align = r.querySelector('.cs-align').value;
+          const out = { name, type, width, mode, onlyError, align };
+          if (type === 'symbol') {
+            const prop = sym.querySelector('.cs-prop').value.trim() || 'State';
+            const raw = sym.querySelector('.cs-map').value.trim();
+            const mappings = {};
+            if (raw) raw.split(';').forEach(p=>{ const kv=p.split('='); if (kv[0]&&kv[1]) mappings[kv[0].trim()] = kv[1].trim(); });
+            const onlyWhenMapped = sym.querySelector('.cs-onlymap').checked || false;
+            const componentId = sym.querySelector('.cs-comp-id').value.trim() || null;
+            out.prop = prop; out.mappings = mappings; out.onlyWhenMapped = onlyWhenMapped; out.componentId = componentId;
+          }
+          return out;
+        }).filter(x => x.name);
+      }
+      function recalcWidthWarning(){
+        const target = parseInt((document.getElementById('tableTargetWidth').value||'1200'),10)||1200;
+        const rows = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+        let pxSum=0, fillCount=0;
+        rows.forEach(w=>{ const r=w.querySelector('.row'); const mode=r.querySelector('.cs-mode').value; if (mode==='px') pxSum+= parseInt(r.querySelector('.cs-width').value||'0',10)||0; else fillCount++; });
+        const summary = document.getElementById('widthSummary');
+        const status = pxSum > target ? 'Scroll risk' : 'OK';
+        if (summary) { summary.textContent = `Fixed: ${pxSum}px • Fill: ${fillCount} • Target: ${target}px • ${status}`; }
+      }
+      var addColBtn = document.getElementById('addColBtn'); if (addColBtn) addColBtn.addEventListener('click', ()=> { addColSetupRow(); requestResize(); });
+      var autoColsBtn = document.getElementById('autoColsBtn'); if (autoColsBtn) autoColsBtn.addEventListener('click', ()=>{
+        const payload = getOptions(); if (payload.headers && payload.headers.length) { populateColSetup(payload.headers); requestResize(); }
+      });
+      var captureSpecsBtn = document.getElementById('captureSpecsBtn'); if (captureSpecsBtn) captureSpecsBtn.addEventListener('click', ()=>{
+        try { if (window.__logDebug) window.__logDebug('UI: captureColumnSpecs'); } catch(_) {}
+        parent.postMessage({ pluginMessage: { type: 'captureColumnSpecs' } }, '*');
+      });
+      var redisBtn = document.getElementById('redistributeBtn'); if (redisBtn) redisBtn.addEventListener('click', ()=>{
+        const target = parseInt((document.getElementById('tableTargetWidth').value||'1200'),10)||1200;
+        const rows = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+        if (!rows.length) return;
+        const per = Math.max(40, Math.floor(target / rows.length));
+        rows.forEach(w=>{ const r=w.querySelector('.row'); const width=r.querySelector('.cs-width'); if (width) width.value = per; });
+        recalcWidthWarning();
+      });
+      var fitBtn = document.getElementById('fitColsBtn'); if (fitBtn) fitBtn.addEventListener('click', ()=>{
+        const target = parseInt((document.getElementById('tableTargetWidth').value||'1200'),10)||1200;
+        const stacks = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+        if (!stacks.length) return;
+        // Sum fixed px columns
+        let pxSum = 0, fillCols = [];
+        stacks.forEach(w=>{ const r=w.querySelector('.row'); const mode=r.querySelector('.cs-mode'); const width=r.querySelector('.cs-width'); if (!mode||!width) return; if (mode.value==='px') pxSum += parseInt(width.value||'0',10)||0; else fillCols.push({r, mode, width}); });
+        let remain = Math.max(0, target - pxSum);
+        let per = fillCols.length ? Math.max(40, Math.floor(remain / fillCols.length)) : 0;
+        fillCols.forEach(c=>{ c.mode.value='px'; c.width.value = per || 40; Array.from(c.r.querySelectorAll('.cs-mode-group button')).forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-val')==='px'); }); });
+        recalcWidthWarning();
+      });
+
+      // Fit columns but preserve any columns set to fill
+      var fitPreserveBtn = document.getElementById('fitColsPreserveBtn'); if (fitPreserveBtn) fitPreserveBtn.addEventListener('click', ()=>{
+        const target = parseInt((document.getElementById('tableTargetWidth').value||'1200'),10)||1200;
+        const stacks = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+        if (!stacks.length) return;
+        // Work only with px columns, leave fill columns untouched
+        const pxCols = [];
+        stacks.forEach(w=>{ const r=w.querySelector('.row'); const mode=r.querySelector('.cs-mode'); const width=r.querySelector('.cs-width'); if (!mode||!width) return; if (mode.value==='px') pxCols.push({r, mode, width}); });
+        if (!pxCols.length) return; // nothing to do
+        // If total px exceeds target, shrink evenly; otherwise leave as-is (fills will take the rest)
+        let pxSum = pxCols.reduce((s,c)=> s + (parseInt(c.width.value||'0',10)||0), 0);
+        if (pxSum <= target) { recalcWidthWarning(); return; }
+        const per = Math.max(40, Math.floor(target / pxCols.length));
+        pxCols.forEach(c=>{ c.width.value = per; });
+        recalcWidthWarning();
+      });
+
+      // ----- View switching (Main <> Config) -----
+      let configDirty = false;
+      function markDirty(){ configDirty = true; }
+      var colSetupListEl = document.getElementById('colSetupList'); if (colSetupListEl) colSetupListEl.addEventListener('input', markDirty);
+      var tgtW = document.getElementById('tableTargetWidth'); if (tgtW) tgtW.addEventListener('input', markDirty);
+      var thf = document.getElementById('typoHeaderFamily'); if (thf) thf.addEventListener('input', markDirty);
+      var ths = document.getElementById('typoHeaderStyle'); if (ths) ths.addEventListener('input', markDirty);
+      var thz = document.getElementById('typoHeaderSize'); if (thz) thz.addEventListener('input', markDirty);
+      var tbf = document.getElementById('typoBodyFamily'); if (tbf) tbf.addEventListener('input', markDirty);
+      var tbs = document.getElementById('typoBodyStyle'); if (tbs) tbs.addEventListener('input', markDirty);
+      var tbz = document.getElementById('typoBodySize'); if (tbz) tbz.addEventListener('input', markDirty);
+
+      function showConfig(){
+        var main = document.querySelector('.wrap');
+        var configView = document.getElementById('configView');
+        if (!main || !configView) return;
+        main.classList.add('view');
+        main.classList.add('hidden');
+        configView.classList.remove('hidden');
+        // Toggle which config is visible
+        var mode = (document.getElementById('modeVal')||{}).value || 'table';
+        var tableCfg = document.getElementById('tableConfig');
+        var cardCfg = document.getElementById('cardConfig');
+        var titleEl = document.getElementById('configTitle'); if (titleEl) titleEl.textContent = (mode === 'cards') ? 'Card Configuration' : 'Column Configuration';
+        if (mode === 'cards') {
+          if (tableCfg) tableCfg.style.display = 'none';
+          if (cardCfg) {
+            cardCfg.style.display = 'block';
+            // Move existing card controls into config area once
+            var target = document.getElementById('cardConfigBody');
+            if (target && !target.dataset.populated) {
+              ['cardTypeOptions','cardSymbolOptions','cardSymbolMapRow','cardImageOptions'].forEach(function(id){
+                var el = document.getElementById(id); if (el) { el.style.display=''; target.appendChild(el); }
+              });
+              // Hide duplicate in main
+              var co = document.getElementById('cardOptions'); if (co) co.style.display = 'none';
+              target.dataset.populated = '1';
+            }
+          }
+        } else {
+          if (tableCfg) tableCfg.style.display = 'block';
+          if (cardCfg) cardCfg.style.display = 'none';
+        }
+        requestResize();
+      }
+      function showMain(){
+        var main = document.querySelector('.wrap');
+        var configView = document.getElementById('configView');
+        if (!main || !configView) return;
+        configView.classList.add('hidden');
+        main.classList.remove('hidden');
+        updateOptionVisibility();
+        try { main.scrollTop = 0; } catch(_) {}
+        try { window.scrollTo({ top: 0 }); } catch(_) {}
+        requestResize();
+      }
+
+      var configBtn = document.getElementById('configBtn'); if (configBtn) configBtn.addEventListener('click', () => {
+        showConfig();
+      });
+      var doneBtn = document.getElementById('doneBtn'); if (doneBtn) doneBtn.addEventListener('click', () => {
+        configDirty = false; if (configBtn) configBtn.classList.remove('dirty');
+        showMain();
+      });
+      var backBtn = document.getElementById('backBtn'); if (backBtn) backBtn.addEventListener('click', () => {
+        if (!configDirty) { showMain(); return; }
+        const modal = document.getElementById('confirmModal');
+        modal.style.display = 'flex';
+      });
+      var cancelDiscardBtn = document.getElementById('cancelDiscardBtn'); if (cancelDiscardBtn) cancelDiscardBtn.addEventListener('click', ()=>{
+        document.getElementById('confirmModal').style.display = 'none';
+      });
+      var confirmDiscardBtn = document.getElementById('confirmDiscardBtn'); if (confirmDiscardBtn) confirmDiscardBtn.addEventListener('click', ()=>{
+        configDirty = false; if (configBtn) configBtn.classList.remove('dirty');
+        document.getElementById('confirmModal').style.display = 'none';
+        showMain();
+      });
+
+      // Show dirty dot when config changes
+      function markDirty(){ configDirty = true; if (configBtn) configBtn.classList.add('dirty'); }
+
+      $('generateBtn').addEventListener('click', () => {
+        const payload = getOptions();
+        if (!payload.rows.length) { alert('No rows parsed. Paste CSV/TSV first.'); return; }
+        parent.postMessage({ pluginMessage: { type: 'generate', payload } }, '*');
+      });
+
+      var applyBtn = document.getElementById('applyConfigBtn');
+      if (applyBtn) applyBtn.addEventListener('click', () => {
+        const payload = getOptions();
+        parent.postMessage({ pluginMessage: { type: 'applyConfig', payload } }, '*');
+      });
+      // (palette extraction removed)
+      // Card layer builder
+      function wireLsToggle(group, hidden){
+        group.addEventListener('click', (e)=>{
+          const btn = e.target && e.target.closest('button'); if (!btn) return;
+          Array.from(group.querySelectorAll('button')).forEach(b=>{ b.classList.remove('active'); b.setAttribute('aria-checked','false'); b.setAttribute('tabindex','-1'); });
+          btn.classList.add('active'); btn.setAttribute('aria-checked','true'); btn.setAttribute('tabindex','0'); hidden.value = btn.getAttribute('data-val') || hidden.value;
+        });
+      }
+      function addLayerSetupRow(prefill){
+        const row = document.createElement('div'); row.className = 'row cs-row';
+        row.innerHTML = `
+          <div class="cs-field cs-name-wrap" style="flex:1 1 220px">
+            <div class="small muted">Name</div>
+            <input type="text" class="ls-name" placeholder="layer name" />
+          </div>
+          <div class="cs-field">
+            <div class="small muted">Type</div>
+            <div class="btn-group ls-type-group" role="radiogroup" aria-label="Type"><button type="button" data-val="text" class="active" role="radio" aria-checked="true" tabindex="0">Text</button><button type="button" data-val="symbol" role="radio" aria-checked="false" tabindex="-1">Symbol</button></div>
+            <input type="hidden" class="ls-type" value="text" />
+          </div>
+          <div class="cs-controls" style="margin-left:auto; display:flex; gap:6px; align-items:center">
+            <button class="ls-remove" title="Remove">✕</button>
+          </div>
+        `;
+        const sym = document.createElement('div'); sym.className='stack'; sym.style.display='none';
+        sym.innerHTML = `
+          <div class="row">
+            <label>Property <input type="text" class="ls-prop" value="State" /></label>
+            <label style="flex:1">Mappings (csv=mapped) <input type="text" class="ls-map" placeholder="success=Success;warning=Warning;error=Error" /></label>
+          </div>
+          <div class="row">
+            <label class="inline"><span>Error-only preset</span><input type="checkbox" class="ls-only" /></label>
+            <label class="inline"><span>Only show when mapped</span><input type="checkbox" class="ls-onlymap" /></label>
+          </div>
+          <div class="row">
+            <button class="ls-capture">Capture component</button>
+            <button class="ls-pick">Pick component</button>
+            <div class="small muted">Component: <span class="ls-comp-name">none</span></div>
+          </div>
+          <input type="hidden" class="ls-comp-id" />
+        `;
+        const wrap = document.createElement('div'); wrap.className='stack';
+        wrap.appendChild(row); wrap.appendChild(sym);
+        document.getElementById('cardLayerList').appendChild(wrap);
+        const typeGroup = row.querySelector('.ls-type-group'); const typeHidden = row.querySelector('.ls-type');
+        wireLsToggle(typeGroup, typeHidden);
+        function syncSym(){ sym.style.display = (typeHidden.value === 'symbol') ? '' : 'none'; }
+        typeGroup.addEventListener('click', syncSym); syncSym();
+        const rem = row.querySelector('.ls-remove'); if (rem) rem.addEventListener('click', ()=>{ wrap.remove(); recalcLayerSummary(); });
+        const cap = sym.querySelector('.ls-capture'); if (cap) cap.addEventListener('click', ()=>{ wrap.dataset.layerId = wrap.dataset.layerId || (Date.now()+Math.random()).toString(36); parent.postMessage({ pluginMessage: { type: 'captureColumnComponent', id: wrap.dataset.layerId } }, '*'); });
+        const pick = sym.querySelector('.ls-pick'); if (pick) pick.addEventListener('click', ()=>{ parent.postMessage({ pluginMessage: { type: 'getComponents' } }, '*'); window.__compPickTarget = wrap; });
+        if (prefill){
+          row.querySelector('.ls-name').value = prefill.name || '';
+          typeHidden.value = prefill.type || 'text'; Array.from(typeGroup.querySelectorAll('button')).forEach(b=>{ b.classList.toggle('active', b.getAttribute('data-val')===typeHidden.value); });
+          const prop = sym.querySelector('.ls-prop'); if (prefill.prop && prop) prop.value = prefill.prop;
+          const map = sym.querySelector('.ls-map'); if (prefill.mappings && map){ const arr=[]; for (const k in prefill.mappings) arr.push(k+'='+prefill.mappings[k]); map.value = arr.join(';'); }
+          const only = sym.querySelector('.ls-only'); if (only) only.checked = !!prefill.onlyError;
+          const onlym = sym.querySelector('.ls-onlymap'); if (onlym) onlym.checked = !!prefill.onlyWhenMapped;
+          if (prefill.componentId){ sym.querySelector('.ls-comp-id').value = prefill.componentId; sym.querySelector('.ls-comp-name').textContent = prefill.componentName || 'captured'; }
+          syncSym();
+        }
+        recalcLayerSummary();
+      }
+      function recalcLayerSummary(){ const list = Array.from(document.querySelectorAll('#cardLayerList > .stack')); const sum = document.getElementById('cardLayerSummary'); if (sum) sum.textContent = `${list.length} layer(s)`; }
+      function serializeLayerSetup(){
+        const stacks = Array.from(document.querySelectorAll('#cardLayerList > .stack'));
+        return stacks.map(w => {
+          const name = (w.querySelector('.ls-name')||{}).value || '';
+          const type = (w.querySelector('.ls-type')||{}).value || 'text';
+          const out = { name, type };
+          if (type==='symbol'){
+            const prop = (w.querySelector('.ls-prop')||{}).value || 'State';
+            const raw = (w.querySelector('.ls-map')||{}).value || '';
+            const mappings = {}; if (raw) raw.split(';').forEach(p=>{ const kv=p.split('='); if (kv[0]&&kv[1]) mappings[kv[0].trim()] = kv[1].trim(); });
+            const onlyError = !!((w.querySelector('.ls-only')||{}).checked);
+            const onlyWhenMapped = !!((w.querySelector('.ls-onlymap')||{}).checked);
+            const componentId = (w.querySelector('.ls-comp-id')||{}).value || null;
+            const componentName = (w.querySelector('.ls-comp-name')||{}).textContent || null;
+            Object.assign(out, { prop, mappings, onlyError, onlyWhenMapped, componentId, componentName });
+          }
+          return out;
+        }).filter(x=>x.name);
+      }
+      var addLayerBtn = document.getElementById('addLayerBtn'); if (addLayerBtn) addLayerBtn.addEventListener('click', ()=>{ addLayerSetupRow(); requestResize(); });
+      var cardApplyBtn = document.getElementById('cardApplyBtn'); if (cardApplyBtn) cardApplyBtn.addEventListener('click', ()=>{
+        const mode = (document.getElementById('ls-size-mode')||{}).value || 'px';
+        const width = parseInt(((document.getElementById('ls-width')||{}).value||'240'),10)||240;
+        const height = parseInt(((document.getElementById('ls-height')||{}).value||'140'),10)||140;
+        const layerSetup = serializeLayerSetup();
+        parent.postMessage({ pluginMessage: { type: 'applyCardConfig', options: { cardSize: { mode, width, height }, layerSetup } } }, '*');
+      });
+      // Size mode toggle
+      (function(){ const g=document.querySelector('.ls-size-group'); const h=document.getElementById('ls-size-mode'); if (g&&h){ g.addEventListener('click',(e)=>{ const b=e.target&&e.target.closest('button'); if(!b) return; Array.from(g.querySelectorAll('button')).forEach(x=>{x.classList.remove('active'); x.setAttribute('aria-checked','false'); x.setAttribute('tabindex','-1');}); b.classList.add('active'); b.setAttribute('aria-checked','true'); b.setAttribute('tabindex','0'); h.value=b.getAttribute('data-val')||h.value; const isFill=h.value==='fill'; document.getElementById('ls-width').disabled=isFill; document.getElementById('ls-height').disabled=isFill; }); } })();
+      var captureBtn = document.getElementById('captureBtn'); if (captureBtn) captureBtn.addEventListener('click', ()=>{
+        const h = document.getElementById('hint'); if (h) h.textContent = 'Capturing selection...';
+        try { if (window.__logDebug) window.__logDebug('UI: captureSelection click'); } catch(_) {}
+        parent.postMessage({ pluginMessage: { type: 'captureSelection' } }, '*');
+      });
+      // Toggle color vars UI
+      (function(){
+        const cb = document.getElementById('useVars'); if (!cb) return;
+        cb.addEventListener('change', ()=>{
+          updateOptionVisibility();
+          if (cb.checked) parent.postMessage({ pluginMessage: { type: 'getVariables' } }, '*');
+        });
+        const hdr = document.getElementById('headerRow'); if (hdr) hdr.addEventListener('change', updateOptionVisibility);
+        const zeb = document.getElementById('zebra'); if (zeb) zeb.addEventListener('change', updateOptionVisibility);
+      })();
+      // Variable picker popover
+      (function(){
+        function closePopover(){ var p=document.getElementById('varPopover'); if(p){ p.style.display='none'; p.innerHTML=''; } if (window.__varPickTimer){ try{ clearTimeout(window.__varPickTimer);}catch(_){ } window.__varPickTimer=null; } }
+        document.addEventListener('click', (e)=>{
+          const btn = e.target && e.target.closest && e.target.closest('.var-pick');
+          if (!btn) { const pop = document.getElementById('varPopover'); if (pop && !pop.contains(e.target)) closePopover(); return; }
+          // Fetch variables and show popover near button
+          const forId = btn.getAttribute('data-for');
+          const rect = btn.getBoundingClientRect();
+          try { window.__varPickCtx = { forId, left: Math.max(8, Math.min(window.innerWidth-240, rect.left)), top: rect.bottom + 6 }; } catch(_) {}
+          const p = document.getElementById('varPopover'); if (p) {
+            p.style.left = (window.__varPickCtx.left||rect.left) + 'px';
+            p.style.top = (window.__varPickCtx.top||rect.bottom+6) + 'px';
+            p.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #eee"><strong>Pick variable</strong><button id="varPopClose">✕</button></div><div style="padding:8px">Loading variables…</div>';
+            p.style.display='block';
+            const c=document.getElementById('varPopClose'); if (c) c.addEventListener('click', closePopover);
+          }
+          if (window.__varPickTimer){ try{ clearTimeout(window.__varPickTimer);}catch(_){ } }
+          window.__varPickTimer = setTimeout(()=>{
+            const pp=document.getElementById('varPopover'); if (!pp) return;
+            pp.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #eee"><strong>Pick variable</strong><button id="varPopClose2">✕</button></div><div style="padding:8px">No color variables found in this file.</div>';
+            pp.style.display='block';
+            const cc=document.getElementById('varPopClose2'); if (cc) cc.addEventListener('click', closePopover);
+            window.__varPickTimer=null;
+          }, 1600);
+          parent.postMessage({ pluginMessage: { type: 'getVariables' } }, '*');
+        });
+      })();
+
+      // Sticky footer + fob visibility + Enter-to-apply
+      (function(){
+        const fob = document.getElementById('scrollFob');
+        function updateFob(){ if (!fob) return; const more = document.body.scrollHeight > window.innerHeight + 8 && (window.scrollY + window.innerHeight) < (document.body.scrollHeight - 8); fob.style.display = more ? 'flex' : 'none'; }
+        window.addEventListener('scroll', updateFob);
+        window.addEventListener('resize', updateFob);
+        if (fob) fob.addEventListener('click', ()=>{ const t = document.getElementById('updateCta'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'end' }); else window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }); });
+        updateFob();
+        // Enter to apply/generate only when not typing in inputs
+        window.addEventListener('keydown', (e)=>{
+          if (e.key === 'Enter' && !e.shiftKey) {
+            const ae = document.activeElement;
+            const tag = ae && ae.tagName ? ae.tagName.toUpperCase() : '';
+            const isInput = (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || ae && ae.isContentEditable);
+            if (isInput) return; // let inputs handle Enter normally
+            e.preventDefault();
+            const payload = getOptions();
+            parent.postMessage({ pluginMessage: { type: 'detectAction', payload } }, '*');
+          }
+        });
+      })();
+      // Safety listener: ensure capturedSelection is applied even if onmessage is overridden
+      window.addEventListener('message', (ev) => {
+        try {
+          const pm = ev.data && ev.data.pluginMessage; if (!pm) return;
+          if (pm.type === 'capturedSelection') {
+            try { console.log('[DP UI recv]', pm.type, pm.payload && pm.payload.mode); } catch(_) {}
+            loadCaptured(pm.payload);
+            try { window.__lastCapturedPayload = pm.payload; } catch(_) {}
+            try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(_) {}
+            requestResize();
+          }
+        } catch(_) {}
+      });
+      var copyHeadersBtn = document.getElementById('copyHeadersBtn');
+      if (copyHeadersBtn) copyHeadersBtn.addEventListener('click', async ()=>{
+        const payload = getOptions();
+        const headers = (payload && payload.options && payload.options.columnSetup) ? payload.options.columnSetup.map(c=>c.name).filter(Boolean) : (payload.headers||[]);
+        const line = headers.join(',');
+        try { await navigator.clipboard.writeText(line); } catch(_){ }
+      });
+
+      // One-click Replace from Capture button
+      (function(){
+        const wrap = document.getElementById('updateCta'); if (!wrap) return;
+        if (!document.getElementById('replaceFromCaptureBtn')){
+          const btn = document.createElement('button');
+          btn.textContent = 'Replace from Capture (Selection)';
+          btn.className = 'fullw';
+          btn.id = 'replaceFromCaptureBtn';
+          wrap.appendChild(btn);
+          btn.addEventListener('click', ()=>{
+            const payload = window.__lastCapturedPayload;
+            if (!payload || !payload.rows || !payload.rows.length) { alert('No captured data available. Use the camera button to capture first.'); return; }
+            const msgType = (payload.mode === 'cards') ? 'generate' : 'update';
+            parent.postMessage({ pluginMessage: { type: msgType, payload } }, '*');
+          });
+        }
+      })();
+
+      // Auto-preview variable colors on blur/change
+      (function(){
+        function requestPreview(){
+          const names = [];
+          ['varHeaderBg','varHeaderText','varBodyText'].forEach(id=>{ const el=document.getElementById(id); const v=el&&el.value; if (v && v.trim()) names.push(v.trim()); });
+          if (names.length) parent.postMessage({ pluginMessage: { type: 'resolveVarColors', names } }, '*');
+        }
+        ['varHeaderBg','varHeaderText','varBodyText'].forEach(id=>{
+          const el = document.getElementById(id); if (!el) return;
+          el.addEventListener('blur', requestPreview);
+          el.addEventListener('change', requestPreview);
+        });
+      })();
+
+      // Export Schema
+      function buildSchemaCSV(headers, options) {
+        let cols = headers.slice();
+        if (options && options.columnSetup && options.columnSetup.length) cols = options.columnSetup.map(c => c.name);
+        else if (options && options.columnsCount) cols = headers.slice(0, options.columnsCount);
+        const sym = (options && Array.isArray(options.symbols)) ? options.symbols.slice() : [];
+        if (options && options.columnSetup && options.columnSetup.length) {
+          for (const c of options.columnSetup) if (c.type === 'symbol') sym.push({ column: c.name, type: 'variant', mappings: c.mappings||null });
+        }
+        const samples = [];
+        for (const c of cols) {
+          const s = sym.find(x => x.column && x.column.toLowerCase() === String(c).toLowerCase());
+          if (s) {
+            if (s.type === 'variant' || s.type === 'sparkline') {
+              const keys = s.mappings ? Object.keys(s.mappings) : [];
+              samples.push(keys.length ? `[one of: ${keys.join('|')}]` : `[mapped value]`);
+            } else {
+              samples.push('[value]');
+            }
+          } else if (options && options.keyColumn && String(c) === String(options.keyColumn)) {
+            samples.push('[unique key]');
+          } else {
+            samples.push('[text]');
+          }
+        }
+        const toCSV = arr => arr.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v)).join(',');
+        return toCSV(cols) + "\n" + toCSV(samples) + "\n";
+      }
+
+      $('exportSchemaBtn').addEventListener('click', () => {
+        const payload = getOptions();
+        if (!payload.headers.length) { alert('Parse or import data first.'); return; }
+        const csv = buildSchemaCSV(payload.headers, payload.options);
+        const wrap = document.getElementById('schemaWrap');
+        wrap.style.display = '';
+        const out = document.getElementById('schemaOut');
+        out.value = csv;
+        requestResize();
+      });
+
+      $('copySchemaBtn').addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(document.getElementById('schemaOut').value); } catch (_) {}
+      });
+
+      $('downloadSchemaBtn').addEventListener('click', () => {
+        const text = document.getElementById('schemaOut').value || '';
+        const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'schema.csv'; a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      });
+
+      // Cards: symbol error-only preset
+      (function(){
+        var btn = document.getElementById('cardSymbolErrorPreset');
+        if (btn) btn.addEventListener('click', function(){
+          var el = document.getElementById('cardSymbolMap');
+          if (el) el.value = 'error=Error;fail=Error;failure=Error;critical=Critical';
+        });
+      })();
+
+      // --- Card CSV tools (for LLM prompts) ---
+      (function(){
+        function toCSVLine(arr){
+          return (arr||[]).map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g,'""') + '"' : String(v)).join(',');
+        }
+        function getConfiguredCardHeaders(){
+          const names = Array.from(document.querySelectorAll('#cardLayerList > .stack .ls-name'))
+            .map(i => (i && i.value ? i.value.trim() : ''))
+            .filter(Boolean);
+          if (names.length) return names;
+          try { return (window.__lastCapturedPayload && window.__lastCapturedPayload.headers) || []; } catch(_) { return []; }
+        }
+        function buildCardSchemaCSV(){
+          const headers = getConfiguredCardHeaders();
+          if (!headers.length) return '';
+          const sample = headers.map(h => (/image|avatar|photo|url/i.test(String(h)) ? 'https://example.com/image.jpg' : `Sample ${h}`));
+          return toCSVLine(headers) + "\n" + toCSVLine(sample) + "\n";
+        }
+        const buildBtn = document.getElementById('cardBuildSchemaBtn');
+        if (buildBtn) buildBtn.addEventListener('click', ()=>{
+          const out = document.getElementById('cardSchemaOut'); if (!out) return;
+          const csv = buildCardSchemaCSV();
+          if (!csv) { alert('Define Card layers or capture selection first.'); return; }
+          out.value = csv; requestResize();
+        });
+        const capBtn = document.getElementById('cardCaptureCsvBtn');
+        if (capBtn) capBtn.addEventListener('click', ()=>{
+          const out = document.getElementById('cardSchemaOut'); if (!out) return;
+          try {
+            const p = window.__lastCapturedPayload;
+            if (!p || (p.mode||'') !== 'cards') { alert('Capture a Cards selection first.'); return; }
+            const headers = p.headers || [];
+            const rows = p.rows || [];
+            if (!headers.length || !rows.length) { alert('No captured data.'); return; }
+            const csv = [toCSVLine(headers)].concat(rows.map(r => toCSVLine(headers.map(h => r[h])))).join('\n');
+            out.value = csv; requestResize();
+          } catch(_) { alert('Could not access captured data.'); }
+        });
+        const copyBtn = document.getElementById('cardCopySchemaBtn');
+        if (copyBtn) copyBtn.addEventListener('click', async ()=>{
+          const out = document.getElementById('cardSchemaOut'); if (!out) return;
+          try { await navigator.clipboard.writeText(out.value || ''); } catch(_) {}
+        });
+        const dlBtn = document.getElementById('cardDownloadSchemaBtn');
+        if (dlBtn) dlBtn.addEventListener('click', ()=>{
+          const out = document.getElementById('cardSchemaOut'); if (!out) return;
+          const text = out.value || '';
+          const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a'); a.href = url; a.download = 'card-schema.csv'; a.click();
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        });
+      })();
+
+      $('updateBtn').addEventListener('click', () => {
+        const payload = getOptions();
+        if (!payload.rows.length) { alert('No rows parsed. Paste CSV/TSV first.'); return; }
+        parent.postMessage({ pluginMessage: { type: 'update', payload } }, '*');
+      });
+
+      // Debug panel
+      (function(){
+        const dbgWrap = document.createElement('div');
+        dbgWrap.className = 'stack';
+        dbgWrap.innerHTML = '<label class="inline"><span>Debug</span><input type="checkbox" id="dbgToggle" /></label><div style="display:flex; gap:8px; align-items:center;"><button id="dbgDumpSel">Dump Selection Tree</button></div><textarea id="dbgOut" class="mono" style="display:none; min-height:80px"></textarea>';
+        document.querySelector('.wrap').appendChild(dbgWrap);
+        const toggle = document.getElementById('dbgToggle'); const out = document.getElementById('dbgOut');
+        // Default ON for debug while iterating
+        if (toggle) toggle.checked = true; if (out) out.style.display = 'block';
+        function log(obj){ if (!toggle || !out) return; if (!toggle.checked) return; try { out.style.display='block'; out.value += (typeof obj==='string'? obj : JSON.stringify(obj)) + "\n"; out.scrollTop = out.scrollHeight; } catch(_){} }
+        window.__logDebug = log;
+        // Also mirror top debug chip (footer sync below)
+        const top = document.getElementById('dbgToggleTop');
+        if (top && toggle) {
+          top.checked = true; // default ON
+          const sync = ()=>{ toggle.checked = top.checked; out.style.display = toggle.checked ? 'block' : 'none'; };
+          top.addEventListener('change', sync);
+          sync();
+        }
+        // Dump selection tree button
+        const dumpBtn = document.getElementById('dbgDumpSel');
+        if (dumpBtn) dumpBtn.addEventListener('click', ()=>{
+          try { if (window.__logDebug) window.__logDebug('UI: dumpSelection requested'); } catch(_) {}
+          parent.postMessage({ pluginMessage: { type: 'dumpSelection' } }, '*');
+        });
+        // Trace images button
+        // (trace images button removed)
+        // Listen for debug messages without overriding main handler
+        window.addEventListener('message', (event)=>{
+          const msg = event.data && event.data.pluginMessage; if (!msg) return;
+          if (msg.type === 'debug') { log(msg.data); }
+          if (msg.type === 'variablesList') {
+            try {
+              const list = msg.list || [];
+              const dl = document.getElementById('colorVarList');
+              if (dl) {
+                dl.innerHTML = '';
+                list.forEach(n => { const opt = document.createElement('option'); opt.value = n; dl.appendChild(opt); });
+              }
+              var uv = document.getElementById('useVars');
+              if (uv && uv.checked && (!list || !list.length)) {
+                const h = document.getElementById('hint'); if (h) h.textContent = 'No color variables found in this file.';
+              }
+            } catch(_) {}
+          }
+        });
+      })();
+
+      onmessage = (event) => {
+        try {
+          const msg = event.data && event.data.pluginMessage;
+          if (!msg) return;
+          try { if (window.__logDebug) window.__logDebug({ recv: msg.type }); } catch(_) {}
+          if (msg.type === 'detectActionResult') {
+            try {
+              const use = msg.use || 'generate';
+              const payload = getOptions();
+              if (!payload.rows.length) { alert('No rows parsed. Paste CSV/TSV first.'); return; }
+              parent.postMessage({ pluginMessage: { type: use, payload } }, '*');
+            } catch(_){}
+            return;
+          }
+          if (msg.type === 'done') {
+          const h = document.getElementById('hint'); if (h) h.textContent = `Generated ${msg.count} items.`;
+          requestResize();
+        } else if (msg.type === 'error') {
+          const h = document.getElementById('hint'); if (h) h.textContent = `Error: ${msg.message}`;
+          requestResize();
+        } else if (msg.type === 'hint') {
+          const el = document.getElementById('hint');
+          if (el) el.textContent = msg.message || '';
+          requestResize();
+        } else if (msg.type === 'capturedSelection') {
+          loadCaptured(msg.payload);
+          try { window.__lastCapturedPayload = msg.payload; } catch(_) {}
+          // jump to top for editing comfort
+          try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(_) {}
+          requestResize();
+        } else if (msg.type === 'columnSpecs') {
+          try {
+            const cols = msg.columns || [];
+            if (cols && cols.length) {
+              if (window.__logDebug) window.__logDebug({ where:'ui.captureSpecs', count: cols.length });
+              if (typeof loadColSetup === 'function') {
+                loadColSetup(cols);
+              }
+            }
+          } catch(_) {}
+          requestResize();
+        } else if (msg.type === 'varColorPreview') {
+          try {
+            const map = msg.colors || {};
+            function setIf(name, inputId){ if (map[name]) { var el = document.getElementById(inputId); if (el) el.value = map[name]; } }
+            var vh = (document.getElementById('varHeaderText')||{}).value; if (vh) setIf(vh, 'colHeaderText');
+            var vb = (document.getElementById('varBodyText')||{}).value; if (vb) setIf(vb, 'colBodyText');
+            var vbg = (document.getElementById('varHeaderBg')||{}).value; if (vbg) setIf(vbg, 'colHeaderBg');
+            // zebra bg doesn't have a variable field in UI; ignore
+          } catch(_){ }
+          requestResize();
+        } else if (msg.type === 'variablesList') {
+          // Build the popover using stored context
+          try {
+            const p = document.getElementById('varPopover'); if (!p) return;
+            if (window.__varPickTimer){ try{ clearTimeout(window.__varPickTimer);}catch(_){ } window.__varPickTimer=null; }
+            const list = msg.list || [];
+            const header = '<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; padding:6px 8px; border-bottom:1px solid #eee"><strong>Pick variable</strong><button id="varPopClose">✕</button></div>';
+            const items = list.map(n => `<div class=\"pop-item\" data-name=\"${n.replace(/\"/g,'&quot;')}\" style=\"padding:6px 8px; cursor:pointer\">${n}</div>`).join('');
+            p.innerHTML = header + (items || '<div style="padding:8px">No color variables found in this file.</div>');
+            const ctx = window.__varPickCtx || {};
+            if (ctx.left != null) { p.style.left = ctx.left + 'px'; }
+            if (ctx.top != null) { p.style.top = ctx.top + 'px'; }
+            p.style.display = 'block';
+            const c=document.getElementById('varPopClose'); if (c) c.addEventListener('click', ()=>{ p.style.display='none'; p.innerHTML=''; });
+            const els = p.querySelectorAll('.pop-item');
+            els.forEach(node => { if (node && node.addEventListener) node.addEventListener('click', ()=>{
+              const name = node.getAttribute('data-name');
+              const input = document.getElementById(ctx.forId); if (input) input.value = name;
+              parent.postMessage({ pluginMessage: { type: 'resolveVarColors', names: [name] } }, '*');
+              p.style.display='none'; p.innerHTML='';
+            }); });
+          } catch(_){}
+          requestResize();
+        } else if (msg.type === 'componentsList') {
+          try {
+            const list = msg.list || [];
+            if (!window.__compPickTarget) return;
+            const wrap = window.__compPickTarget;
+            const sym = wrap.querySelector('.stack');
+            const sel = document.createElement('div'); sel.style.maxHeight='200px'; sel.style.overflow='auto'; sel.style.border='1px solid #eee'; sel.style.borderRadius='6px'; sel.style.padding='6px';
+            sel.innerHTML = list.map(c=>`<div class="pop-item" data-id="${c.id}" style="padding:6px; cursor:pointer">${c.name}</div>`).join('');
+            const dlg = document.getElementById('varPopover'); if (dlg){ dlg.innerHTML=''; dlg.appendChild(sel); const r = (wrap.getBoundingClientRect()); dlg.style.left = Math.max(8, Math.min(window.innerWidth-240, r.left)) + 'px'; dlg.style.top = (r.bottom + 6) + 'px'; dlg.style.display='block'; }
+            const items = sel.querySelectorAll('.pop-item');
+            items.forEach(el => { if (el && el.addEventListener) el.addEventListener('click', ()=>{
+              const id = el.getAttribute('data-id');
+              const idInput = sym && sym.querySelector ? sym.querySelector('.ls-comp-id') : null;
+              const nameSpan = sym && sym.querySelector ? sym.querySelector('.ls-comp-name') : null;
+              if (idInput) idInput.value = id;
+              if (nameSpan) nameSpan.textContent = el.textContent;
+              const dlg2 = document.getElementById('varPopover'); if (dlg2) { dlg2.style.display='none'; dlg2.innerHTML=''; }
+            }); });
+          } catch(_) {}
+          requestResize();
+        } else if (msg.type === 'colComponentCaptured') {
+          const id = msg.id;
+          const list = Array.from(document.querySelectorAll('#colSetupList > .stack'));
+          const row = list.find(r => r.dataset.colId === id);
+          if (row) {
+            row.querySelector('.cs-comp-id').value = msg.componentId || '';
+            row.querySelector('.cs-comp-name').textContent = msg.componentName || 'captured';
+          }
+          requestResize();
+        }
+        } catch (err) {
+          try { if (window.__logDebug) window.__logDebug('UI onmessage error: ' + (err && err.message)); } catch(_) {}
+          try { const h=document.getElementById('hint'); if (h) h.textContent = 'UI error: ' + (err && err.message); } catch(_) {}
+        }
+      };
+    </script>
+  </body>
+  </html>
