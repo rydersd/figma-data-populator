@@ -1,0 +1,45 @@
+name: package
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+  release:
+    types: [published]
+
+jobs:
+  build-zip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Create dist folder
+        run: |
+          mkdir -p dist
+
+      - name: Build plugin zip
+        run: |
+          zip -r dist/figma-data-populator.zip \
+            manifest.json \
+            main.js \
+            ui.html \
+            assets \
+            README.md \
+            docs/USAGE.md \
+            docs/PUBLISHING.md
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: figma-data-populator-zip
+          path: dist/figma-data-populator.zip
+
+      - name: Attach to GitHub Release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/figma-data-populator.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
