@@ -37,6 +37,8 @@ task-master generate                                         # Update task markd
 
 ## Key Files & Project Structure
 
+Note: For ongoing developer context and decisions, see `dev_notes.md` at the repo root. Keep this updated so Codex has persistent project memory.
+
 ### Core Files
 
 - `.taskmaster/tasks/tasks.json` - Main task data file (auto-managed)
