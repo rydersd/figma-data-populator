@@ -917,6 +917,82 @@ figma.ui.onmessage = async (msg) => {
       figma.ui.resize(w, h);
       return;
     }
+    if (msg.type === 'exportStructure') {
+      try { figma.notify('Exporting structure…', { timeout: 1200 }); } catch(_) {}
+      const sel = figma.currentPage.selection || [];
+      if (!sel.length) { figma.ui.postMessage({ type: 'error', message: 'Select at least one node.' }); return; }
+
+      function pickLiteFont(f){ try { if (!f) return null; return { family: f.family||null, style: f.style||null }; } catch(_) { return null; } }
+      function serializeNode(n){
+        const base = {
+          id: n.id,
+          type: n.type,
+          name: n.name || '',
+          visible: (n.visible !== false),
+        };
+        try { if ('locked' in n) base.locked = !!n.locked; } catch(_) {}
+        try { if ('x' in n && 'y' in n) { base.x = Math.round(n.x||0); base.y = Math.round(n.y||0); } } catch(_) {}
+        try { if ('width' in n && 'height' in n) { base.width = Math.round(n.width||0); base.height = Math.round(n.height||0); } } catch(_) {}
+        // Auto layout
+        try {
+          if ('layoutMode' in n) {
+            base.layout = {
+              mode: n.layoutMode || 'NONE',
+              primaryAxisSizingMode: n.primaryAxisSizingMode || null,
+              counterAxisSizingMode: n.counterAxisSizingMode || null,
+              primaryAxisAlignItems: n.primaryAxisAlignItems || null,
+              counterAxisAlignItems: n.counterAxisAlignItems || null,
+              itemSpacing: n.itemSpacing != null ? Math.round(n.itemSpacing) : null,
+              paddingLeft: n.paddingLeft != null ? Math.round(n.paddingLeft) : null,
+              paddingRight: n.paddingRight != null ? Math.round(n.paddingRight) : null,
+              paddingTop: n.paddingTop != null ? Math.round(n.paddingTop) : null,
+              paddingBottom: n.paddingBottom != null ? Math.round(n.paddingBottom) : null,
+              layoutWrap: n.layoutWrap || 'NO_WRAP',
+            };
+          }
+        } catch(_) {}
+        // Constraints
+        try { if ('constraints' in n && n.constraints) base.constraints = n.constraints; } catch(_) {}
+        // Text specifics
+        if (n.type === 'TEXT') {
+          try {
+            base.text = {
+              characters: n.characters || '',
+              fontName: pickLiteFont(n.fontName),
+              fontSize: n.fontSize || null,
+              textAutoResize: n.textAutoResize || null,
+              textAlignHorizontal: n.textAlignHorizontal || null,
+              textAlignVertical: n.textAlignVertical || null,
+              lineHeight: (n.lineHeight && typeof n.lineHeight === 'object') ? n.lineHeight : null,
+            };
+          } catch(_) {}
+        }
+        // Instance/component
+        if (n.type === 'INSTANCE') {
+          try {
+            base.instance = {
+              mainComponent: n.mainComponent ? { id: n.mainComponent.id, name: n.mainComponent.name||'' } : null,
+              componentProperties: n.componentProperties || null,
+            };
+          } catch(_) {}
+        }
+        if (n.type === 'COMPONENT') {
+          try { base.component = { name: n.name||'', variantProperties: n.variantProperties || null }; } catch(_) {}
+        }
+        // Children
+        try {
+          if ('children' in n && Array.isArray(n.children)) {
+            base.children = n.children.map(c => serializeNode(c));
+          }
+        } catch(_) {}
+        return base;
+      }
+
+      const payload = sel.length === 1 ? serializeNode(sel[0]) : sel.map(serializeNode);
+      const json = JSON.stringify(payload, null, 2);
+      figma.ui.postMessage({ type: 'structureExport', json });
+      return;
+    }
     if (msg.type === 'captureSelection') {
       try { figma.notify('Capturing selection…', { timeout: 1200 }); } catch(_) {}
       const sel = figma.currentPage.selection;

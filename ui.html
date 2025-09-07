@@ -37,6 +37,7 @@
           <div class="btn-group btn-lg" id="modeGroup" role="radiogroup" aria-label="Mode">
             <button type="button" data-val="table" class="active" title="Table" aria-label="Table" role="radio" aria-checked="true" tabindex="0">Table</button>
             <button type="button" data-val="cards" title="Cards" aria-label="Cards" role="radio" aria-checked="false" tabindex="-1">Cards</button>
+            <button type="button" data-val="dev" title="Dev" aria-label="Dev" role="radio" aria-checked="false" tabindex="-1">Dev</button>
           </div>
           <input type="hidden" id="modeVal" value="table" />
         </div>
@@ -158,6 +159,22 @@ Another,Card,More text"></textarea>
           <div class="small">Layer widths</div>
           <div id="layerSizesList" class="small muted"></div>
         </div>
+      </div>
+
+      <!-- Dev Tools View -->
+      <div class="stack" id="devOptions" style="display:none; max-width:860px; margin:0 auto; padding-right:12px;">
+        <div class="small" style="font-weight:600">Dev Tools</div>
+        <div class="small muted">Inspect and export selection structure for programmatic remapping.</div>
+        <div class="row">
+          <button id="devExportBtn">Export Structure (JSON) of Selection</button>
+          <div></div>
+        </div>
+        <textarea id="devOut" class="mono" placeholder="Selection structure will appear here as JSON" style="min-height:140px"></textarea>
+        <div class="row">
+          <button id="devCopyBtn">Copy</button>
+          <button id="devDownloadBtn">Download</button>
+        </div>
+        <div id="devDebugWrap" class="stack"></div>
       </div>
     </div>
     <div class="resize-handle" id="resizeHandle" title="Drag to resize"></div>
@@ -603,6 +620,7 @@ function updateOptionVisibility() {
   const mode = (mv && mv.value) ? mv.value : 'table';
   const isTable = mode === 'table';
   const isCards = mode === 'cards';
+  const isDev = mode === 'dev';
   document.getElementById('tableOptions').style.display = isTable ? '' : 'none';
   document.getElementById('tableScrollOpts').style.display = isTable ? '' : 'none';
   document.getElementById('tableConfig').style.display = isTable ? '' : 'none';
@@ -611,8 +629,9 @@ function updateOptionVisibility() {
   document.getElementById('cardTypeOptions').style.display = isCards ? '' : 'none';
   document.getElementById('cardSymbolOptions').style.display = isCards ? '' : 'none';
   document.getElementById('cardSymbolMapRow').style.display = isCards ? '' : 'none';
+  var dev = document.getElementById('devOptions'); if (dev) dev.style.display = isDev ? '' : 'none';
   var hr = document.getElementById('hasHeaderRow'); if (hr) hr.style.display = isCards ? 'none' : '';
-  var cfgBtn = document.getElementById('configBtn'); if (cfgBtn) { cfgBtn.style.display = ''; cfgBtn.textContent = isCards ? 'Configure Card' : 'Configure Columns'; }
+  var cfgBtn = document.getElementById('configBtn'); if (cfgBtn) { cfgBtn.style.display = isDev ? 'none' : ''; cfgBtn.textContent = isCards ? 'Configure Card' : 'Configure Columns'; }
 
   // Color vars vs pickers
   var useVars = document.getElementById('useVars');
@@ -1203,6 +1222,10 @@ function updateOptionVisibility() {
             try { window.__lastCapturedPayload = pm.payload; } catch(_) {}
             try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch(_) {}
             requestResize();
+          } else if (pm.type === 'structureExport') {
+            try { console.log('[DP UI recv]', pm.type); } catch(_) {}
+            var out = document.getElementById('devOut'); if (out) out.value = pm.json || '';
+            requestResize();
           }
         } catch(_) {}
       });
@@ -1367,12 +1390,20 @@ function updateOptionVisibility() {
         parent.postMessage({ pluginMessage: { type: 'update', payload } }, '*');
       });
 
+      // Dev: Export Structure (JSON)
+      (function(){
+        var btn = document.getElementById('devExportBtn'); if (btn) btn.addEventListener('click', ()=>{ parent.postMessage({ pluginMessage: { type: 'exportStructure' } }, '*'); });
+        var copy = document.getElementById('devCopyBtn'); if (copy) copy.addEventListener('click', async ()=>{ try { await navigator.clipboard.writeText((document.getElementById('devOut')||{}).value||''); } catch(_) {} });
+        var dl = document.getElementById('devDownloadBtn'); if (dl) dl.addEventListener('click', ()=>{ const text=(document.getElementById('devOut')||{}).value||''; const blob=new Blob([text],{type:'application/json;charset=utf-8'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='structure.json'; a.click(); setTimeout(()=>URL.revokeObjectURL(url),1000); });
+      })();
+
       // Debug panel
       (function(){
         const dbgWrap = document.createElement('div');
         dbgWrap.className = 'stack';
         dbgWrap.innerHTML = '<label class="inline"><span>Debug</span><input type="checkbox" id="dbgToggle" /></label><div style="display:flex; gap:8px; align-items:center;"><button id="dbgDumpSel">Dump Selection Tree</button></div><textarea id="dbgOut" class="mono" style="display:none; min-height:80px"></textarea>';
-        document.querySelector('.wrap').appendChild(dbgWrap);
+        const container = document.getElementById('devDebugWrap') || document.querySelector('.wrap');
+        container.appendChild(dbgWrap);
         const toggle = document.getElementById('dbgToggle'); const out = document.getElementById('dbgOut');
         // Default ON for debug while iterating
         if (toggle) toggle.checked = true; if (out) out.style.display = 'block';
